@@ -20,6 +20,8 @@ import javax.swing.JTextArea;
 import javax.swing.WindowConstants;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import securetext.backend.SecureTextManager;
 
 /**
@@ -31,8 +33,15 @@ public class Gui extends JFrame implements WindowListener {
     private final JScrollPane scrollPane;
     private final JTextArea textArea;
     
+    
+    private static final long MAX_HISTORY_CHARS = 1500000000; // about 3GB
+    private static final boolean printHistoryInfo = true;
+    private static final boolean printAllHistoryInfo = false;
+    
     private long historySize = 0;
     private LinkedList<String> history = new LinkedList<String>();
+    private LinkedList<Integer> historyPos = new LinkedList<Integer>();
+    
     
     public Gui()
     {
@@ -56,7 +65,6 @@ public class Gui extends JFrame implements WindowListener {
         this.textArea.addKeyListener(new KeyListener() {
             @Override
             public void keyTyped(KeyEvent ke) {
-                
             }
 
             @Override
@@ -67,18 +75,29 @@ public class Gui extends JFrame implements WindowListener {
                 else if ((ke.getKeyCode() == KeyEvent.VK_Z) && ((ke.getModifiers() & KeyEvent.CTRL_MASK) != 0)) {
                     undo();
                 }
-                else if ((ke.getModifiers() & KeyEvent.CTRL_MASK) == 0)
-                {
-                    self.setTitle("SecureText - " + manager.getFile().getName() + "*");
-                    updateHistory();
-                }
             }
 
             @Override
             public void keyReleased(KeyEvent ke) {
             }
         });
-        
+        this.textArea.getDocument().addDocumentListener(new DocumentListener(){
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                updateHistory();
+                last = textArea.getText();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                updateHistory();
+                last = textArea.getText();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+            }
+        });
         this.scrollPane = new JScrollPane(this.textArea);
         
         this.getContentPane().add(scrollPane, BorderLayout.CENTER);
@@ -153,23 +172,57 @@ public class Gui extends JFrame implements WindowListener {
         }
     }
     
-    private static final long MAX_HISTORY_CHARS = 1500000000; // about 1.5GB
+    String last = null;
     private void updateHistory()
     {
-        historySize += textArea.getText().length();
-        history.addLast(textArea.getText());
+        if (undoing)
+            return;
+        
+        setTitle("SecureText - " + manager.getFile().getName() + "*");
+        historySize += last.length();
+        history.addLast(last);
+        historyPos.addLast(textArea.getCaretPosition());
         while(historySize > MAX_HISTORY_CHARS)
         {
             historySize -=  history.removeFirst().length();
+            historyPos.removeFirst();
+        }
+        
+        if (printHistoryInfo)
+        {
+            if (printAllHistoryInfo)
+            {
+                System.out.println(history);
+                System.out.println(historyPos);
+            }
+            System.out.println("(" + history.size() + " history entries of " + historySize + " characters)");
         }
     }
     
+    boolean undoing = false;
     private void undo()
     {
+        undoing = true;
+        
         this.textArea.setText(history.getLast());
+        this.textArea.setCaretPosition(historyPos.getLast());
+        
         if (history.size() > 1)
         {
             historySize -= history.removeLast().length();
+            historyPos.removeLast();
+        }
+        
+        undoing = false;
+        
+        if (printHistoryInfo)
+        {
+            if (printAllHistoryInfo)
+            {
+                System.out.println(history);
+                System.out.println(historyPos);
+            }
+            System.out.println("(" + history.size() + " history entries of " + historySize + " characters)");
         }
     }
     
@@ -188,10 +241,11 @@ public class Gui extends JFrame implements WindowListener {
     {
         try {
             System.out.println("loading...");
-            this.textArea.setText(this.manager.loadContent());
             history.clear();
+            historyPos.clear();
             historySize = 0;
-            updateHistory();
+            last = this.manager.loadContent();
+            this.textArea.setText(last);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(null, "Error loading content:\n\n" + ex);
         }
