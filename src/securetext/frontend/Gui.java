@@ -117,8 +117,34 @@ public class Gui extends JFrame implements WindowListener {
             System.exit(0);
         }
         
+        String password = promptPassword("Enter the password to use with the file:");
+        
+        //If we're making a new file, confirm the password...
+        if (!new File(filename).exists())
+        {
+            String confirm = promptPassword("Confirm the password to create the new file with:");
+            if (!password.equals(confirm))
+            {
+                JOptionPane.showMessageDialog(null, "Passwords didn't match! Closing...");
+                System.exit(0);
+            }
+        }
+        
+        try
+            {
+                this.manager = new SecureTextManager(new File(filename), password);
+            }
+            catch (Exception exc)
+            {
+                JOptionPane.showMessageDialog(null, "Error:\n\n" + exc);
+                System.exit(0);
+            }
+    }
+    
+    private String promptPassword(String message)
+    {
         JPanel panel = new JPanel();
-        JLabel label = new JLabel("Enter the password to use with the file:");
+        JLabel label = new JLabel(message);
         JPasswordField pass = new JPasswordField();
         pass.setPreferredSize(new Dimension(240, 20));
         panel.add(label);
@@ -153,22 +179,15 @@ public class Gui extends JFrame implements WindowListener {
                 JOptionPane.showMessageDialog(null, "Invalid input! Closing...");
                 System.exit(0);
             }
+            return new String(password);
             
-            try
-            {
-                this.manager = new SecureTextManager(new File(filename), new String(password));
-            }
-            catch (Exception exc)
-            {
-                JOptionPane.showMessageDialog(null, "Error:\n\n" + exc);
-                System.exit(0);
-            }
         }
         else
         {
             
             //Cancel
             System.exit(0);
+            return null;
         }
     }
     
@@ -246,6 +265,7 @@ public class Gui extends JFrame implements WindowListener {
             historySize = 0;
             last = this.manager.loadContent();
             this.textArea.setText(last);
+            setTitle("SecureText - " + manager.getFile().getName());
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(null, "Error loading content:\n\n" + ex);
         }
